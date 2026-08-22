@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "FLa Vault Project",
+    "slug": "fla-vault-project",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "flavault",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "backgroundColor": "#000000",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIBackgroundModes": []
+      }
+    },
+    "android": {
+      "package": "com.flavault.project",
+      "adaptiveIcon": {
+        "backgroundColor": "#000000"
+      },
+      "intentFilters": [
+        {
+          "action": "android.intent.action.SEND",
+          "data": [
+            {
+              "mimeType": "text/plain"
+            }
+          ],
+          "category": [
+            "android.intent.category.DEFAULT"
+          ]
+        }
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-secure-store",
+      "expo-web-browser"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
