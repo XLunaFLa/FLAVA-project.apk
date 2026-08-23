@@ -91,6 +91,101 @@ export async function notifyDownloadComplete(
 }
 
 /**
+ * Provider khusus YouTube via Piped API (gratis, tanpa key).
+ * Piped = NewPipeExtractor sebagai layanan - pendekatan yang sama
+ * dengan aplikasi NewPipe. Daftar instance fallback untuk keandalan.
+ */
+const PIPED_INSTANCES = [
+  'https://api.piped.private.coffee',
+  'https://pipedapi.adminforge.de',
+  'https://pipedapi.kavin.rocks',
+];
+
+/** Ekstrak videoId dari berbagai format URL YouTube */
+function extractYouTubeId(url: string): string | null {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=)([\w-]{11})/,
+    /(?:youtu\.be\/)([\w-]{11})/,
+    /(?:youtube\.com\/shorts\/)([\w-]{11})/,
+    /(?:youtube\.com\/embed\/)([\w-]{11})/,
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+async function resolveViaPiped(
+  sourceUrl: string,
+  mode: DownloadMode,
+  videoQuality?: string
+): Promise<{ downloadUrl: string; filename: string } | null> {
+  const videoId = extractYouTubeId(sourceUrl);
+  if (!videoId) return null;
+
+  for (const instance of PIPED_INSTANCES) {
+    try {
+      const response = await fetch(`${instance}/streams/${videoId}`, {
+        headers: { Accept: 'application/json' },
+      });
+      if (!response.ok) continue;
+
+      const json = await response.json();
+      const title: string = json.title ?? 'YouTube';
+
+      if (mode === 'audio') {
+        // Pilih audio dengan bitrate tertinggi
+        const audioStreams: Array<{
+          url: string;
+          bitrate?: number;
+          format?: string;
+        }> = json.audioStreams ?? [];
+        const best = audioStreams
+          .filter((s) => s.url)
+          .sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0))[0];
+        if (!best) continue;
+        const ext = best.format?.toLowerCase() === 'm4a' ? 'm4a' : 'mp3';
+        return {
+          downloadUrl: best.url,
+          filename: `YouTube_Audio_${Date.now()}.${ext}`,
+        };
+      }
+
+      // Video: pilih stream GABUNGAN (video+audio) dengan resolusi
+      // tertinggi yang <= permintaan; fallback ke yang tertinggi lainnya
+      const combined: Array<{
+        url: string;
+        quality?: string;
+        videoOnly?: boolean;
+        format?: string;
+      }> = json.videoStreams ?? [];
+      const withAudio = combined.filter((s) => s.url && !s.videoOnly);
+      if (!withAudio.length) continue;
+
+      const requested = parseInt(videoQuality ?? '720', 10) || 720;
+      const parsed = withAudio
+        .map((s) => ({
+          stream: s,
+          height: parseInt(s.quality ?? '0', 10) || 0,
+        }))
+        .sort((a, b) => b.height - a.height);
+
+      const chosen =
+        parsed.find((p) => p.height <= requested) ?? parsed[parsed.length - 1];
+
+      return {
+        downloadUrl: chosen.stream.url,
+        filename: `YouTube_${chosen.stream.quality ?? requested}p_${Date.now()}.mp4`,
+      };
+    } catch {
+      // Coba instance berikutnya
+    }
+  }
+  return null;
+}
+
+/**
  * Provider khusus TikTok via tikwm.com (gratis, tanpa key).
  * Menyediakan file LANGSUNG dari CDN TikTok (tanpa konversi server),
  * sehingga tidak terpengaruh keterbatasan ffmpeg instance Cobalt.
@@ -130,6 +225,16 @@ async function resolveViaTikwm(
 export async function resolveMediaUrl(
   request: DownloadRequest
 ): Promise<{ downloadUrl: string; filename: string }> {
+  // YouTube -> Piped dulu (teknologi NewPipe), fallback ke Cobalt
+  if (/youtube\.com|youtu\.be/i.test(request.sourceUrl)) {
+    const piped = await resolveViaPiped(
+      request.sourceUrl,
+      request.mode,
+      request.videoQuality
+    );
+    if (piped) return piped;
+  }
+
   // TikTok -> tikwm dulu (lebih andal), fallback ke Cobalt
   const tikwm = await resolveViaTikwm(request.sourceUrl, request.mode);
   if (tikwm) return tikwm;
