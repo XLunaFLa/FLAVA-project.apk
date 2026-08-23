@@ -98,6 +98,10 @@ export async function resolveMediaUrl(
     url: request.sourceUrl,
     downloadMode: request.mode === 'audio' ? 'audio' : 'auto',
     filenameStyle: 'pretty',
+    // PENTING: paksa server meremux/menggabungkan file sebelum dikirim.
+    // Tanpa ini, beberapa platform (mis. YouTube) mengembalikan status
+    // local-processing berupa stream terpisah yang tidak bisa diputar.
+    alwaysProxy: true,
   };
 
   if (request.mode === 'video') {
