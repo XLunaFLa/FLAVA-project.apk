@@ -9,13 +9,46 @@ import { Linking } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Alert } from 'react-native';
 import { AuthProvider } from '../src/services/auth';
 import { ToastProvider } from '../src/components/Toast';
 import { COLORS } from '../constants/theme';
 import { extractFirstUrl } from '../src/utils/validation';
+import {
+  ERR_STORAGE_PERMISSION,
+  getVaultUri,
+  requestVaultAccess,
+} from '../src/services/storage';
+import { ensureNotificationPermission } from '../src/services/download';
 
 export default function RootLayout() {
   const router = useRouter();
+
+  // Alur PERTAMA KALI setelah install:
+  // 1. Minta user memilih folder "FLa Vault" (sekali saja, izin permanen)
+  // 2. Minta izin notifikasi (untuk info download selesai)
+  useEffect(() => {
+    void (async () => {
+      try {
+        await getVaultUri();
+      } catch {
+        Alert.alert(
+          'Selamat Datang di FLAVA! 🎉',
+          'Pilih lokasi penyimpanan untuk hasil download.\n\nCara: masuk ke Internal Storage → buat folder baru bernama "FLAVA" → tekan "Use this folder".\n\nIni hanya dilakukan SEKALI.',
+          [
+            { text: 'Nanti', style: 'cancel' },
+            {
+              text: 'Pilih Folder',
+              onPress: () => {
+                void requestVaultAccess();
+              },
+            },
+          ]
+        );
+      }
+      await ensureNotificationPermission();
+    })();
+  }, []);
   /** Guard agar URL share yang sama tidak diproses dua kali */
   const lastProcessedUrl = useRef<string | null>(null);
 

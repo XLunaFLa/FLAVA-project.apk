@@ -11,9 +11,10 @@ expo-env.d.ts
 ios/
 android/
 
-# Environment
+# Environment & credentials
 .env
 .env.local
+client_secret*.json
 
 # IDE
 .vscode/
@@ -30,3 +31,8 @@ yarn-error.*
 
 # TypeScript
 *.tsbuildinfo
+
+# File lokal lain
+fla-vault-qr.png
+cobalt-*.md
+cobalt-*.json

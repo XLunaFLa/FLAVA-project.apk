@@ -36,14 +36,8 @@ export default function TabsLayout() {
           shadowOpacity: 0,
         },
         headerTitle: () => <HeaderTitle />,
-        tabBarStyle: {
-          backgroundColor: COLORS.background,
-          borderTopColor: COLORS.border,
-          borderTopWidth: 1,
-          height: 56 + 12,
-          paddingBottom: 8,
-          paddingTop: 6,
-        },
+        // Navigasi bawah disembunyikan - digantikan menu FAB Plus kuning
+        tabBarStyle: { display: 'none' },
         tabBarActiveTintColor: COLORS.accent,
         tabBarInactiveTintColor: COLORS.textDisabled,
         tabBarLabelStyle: {

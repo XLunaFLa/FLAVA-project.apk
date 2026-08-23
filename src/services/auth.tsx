@@ -1,7 +1,9 @@
 /**
- * Service autentikasi Google Sign-In - FLa Vault Project.
- * Menggunakan expo-auth-session (browser-based OAuth, kompatibel Expo Go).
- * Access token disimpan aman di SecureStore & dipakai untuk Google Drive API.
+ * Service autentikasi Google - FLa Vault Project.
+ * v3: Menggunakan @react-native-google-signin/google-signin (SDK native).
+ * - Popup pilih akun muncul NATIVE di dalam aplikasi (seperti aplikasi besar)
+ * - Tidak ada lagi redirect browser / Error 400 invalid_request
+ * - Access token untuk Google Drive didapat via pertukaran serverAuthCode
  */
 
 import React, {
@@ -11,9 +13,24 @@ import React, {
   useEffect,
   useState,
 } from 'react';
-import * as Google from 'expo-auth-session/providers/google';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import * as SecureStore from 'expo-secure-store';
 import { GoogleUser } from '../types';
+
+const WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '';
+const WEB_CLIENT_SECRET = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_SECRET ?? '';
+
+const STORAGE_KEY = 'flavault.auth.session';
+const AUTH_CONTEXT = createContext<AuthContextValue | undefined>(undefined);
+
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+
+// Konfigurasi SDK native Google (sekali di level modul)
+GoogleSignin.configure({
+  webClientId: WEB_CLIENT_ID || 'missing-web-client-id',
+  offlineAccess: true, // agar dapat serverAuthCode -> ditukar jadi access token Drive
+  scopes: ['openid', 'email', 'profile', DRIVE_SCOPE],
+});
 
 interface AuthState {
   user: GoogleUser | null;
@@ -29,13 +46,92 @@ interface AuthContextValue extends AuthState {
   signOut: () => Promise<void>;
 }
 
-const STORAGE_KEY = 'flavault.auth.session';
-const AUTH_CONTEXT = createContext<AuthContextValue | undefined>(undefined);
-
 interface StoredSession {
   user: GoogleUser;
   accessToken: string;
+  refreshToken: string | null;
   expiresAt: number;
+}
+
+interface GoogleTokenResponse {
+  access_token?: string;
+  refresh_token?: string;
+  expires_in?: number;
+  error?: string;
+  error_description?: string;
+}
+
+/** Tukar serverAuthCode menjadi access token (untuk Google Drive API) */
+async function exchangeCodeForTokens(
+  serverAuthCode: string
+): Promise<{ accessToken: string; refreshToken: string | null; expiresIn: number }> {
+  if (!WEB_CLIENT_SECRET) {
+    throw new Error(
+      'Client Secret Google belum diatur (EXPO_PUBLIC_GOOGLE_CLIENT_SECRET)'
+    );
+  }
+
+  const body = new URLSearchParams({
+    code: serverAuthCode,
+    client_id: WEB_CLIENT_ID,
+    client_secret: WEB_CLIENT_SECRET,
+    redirect_uri: '',
+    grant_type: 'authorization_code',
+  });
+
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+
+  const json = (await response.json()) as GoogleTokenResponse;
+
+  if (!response.ok || !json.access_token) {
+    throw new Error(
+      json.error_description ?? json.error ?? 'Gagal menukar token Google'
+    );
+  }
+
+  return {
+    accessToken: json.access_token,
+    refreshToken: json.refresh_token ?? null,
+    expiresIn: json.expires_in ?? 3600,
+  };
+}
+
+/** Perbarui access token menggunakan refresh token */
+async function refreshAccessToken(
+  refreshToken: string
+): Promise<{ accessToken: string; expiresIn: number }> {
+  if (!WEB_CLIENT_SECRET) {
+    throw new Error(
+      'Client Secret Google belum diatur (EXPO_PUBLIC_GOOGLE_CLIENT_SECRET)'
+    );
+  }
+
+  const body = new URLSearchParams({
+    refresh_token: refreshToken,
+    client_id: WEB_CLIENT_ID,
+    client_secret: WEB_CLIENT_SECRET,
+    grant_type: 'refresh_token',
+  });
+
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+
+  const json = (await response.json()) as GoogleTokenResponse;
+
+  if (!response.ok || !json.access_token) {
+    throw new Error(
+      json.error_description ?? json.error ?? 'Sesi Google kedaluwarsa. Login ulang.'
+    );
+  }
+
+  return { accessToken: json.access_token, expiresIn: json.expires_in ?? 3600 };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -46,39 +142,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ready: false,
   });
 
-  // Scope drive.file: akses HANYA ke file yang dibuat oleh aplikasi ini
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    // webClientId dipakai untuk Expo Go & web; android/ios untuk production build
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-    scopes: [
-      'openid',
-      'email',
-      'profile',
-      'https://www.googleapis.com/auth/drive.file',
-    ],
-    responseType: 'token',
-    selectAccount: true,
-  });
-
-  // DEBUG: tampilkan redirect URI yang harus didaftarkan di Google Cloud Console
-  // (APIs & Services -> Credentials -> Web Client -> Authorized redirect URIs)
-  if (__DEV__ && request?.redirectUri) {
-    console.log(
-      '[FLa Vault] Daftarkan redirect URI ini di Google Cloud:',
-      request.redirectUri
-    );
-  }
-
-  // Pulihkan sesi tersimpan saat aplikasi dibuka
+  // Pulihkan sesi tersimpan saat aplikasi dibuka; refresh token jika kedaluwarsa
   useEffect(() => {
     void (async () => {
       try {
         const raw = await SecureStore.getItemAsync(STORAGE_KEY);
         if (raw) {
           const saved = JSON.parse(raw) as StoredSession;
-          // Token masih berlaku (beri margin 60 detik)
           if (saved.accessToken && Date.now() < saved.expiresAt - 60_000) {
             setState({
               user: saved.user,
@@ -88,6 +158,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             });
             return;
           }
+          // Token kedaluwarsa -> coba refresh diam-diam
+          if (saved.refreshToken) {
+            try {
+              const refreshed = await refreshAccessToken(saved.refreshToken);
+              const updated: StoredSession = {
+                ...saved,
+                accessToken: refreshed.accessToken,
+                expiresAt: Date.now() + refreshed.expiresIn * 1000,
+              };
+              await SecureStore.setItemAsync(
+                STORAGE_KEY,
+                JSON.stringify(updated)
+              );
+              setState({
+                user: saved.user,
+                accessToken: refreshed.accessToken,
+                loading: false,
+                ready: true,
+              });
+              return;
+            } catch {
+              // Refresh gagal -> hapus sesi, minta login ulang
+              await SecureStore.deleteItemAsync(STORAGE_KEY);
+            }
+          }
         }
       } catch {
         // Data rusak/tidak bisa dibaca -> anggap belum login
@@ -96,81 +191,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  const completeSignIn = useCallback(
-    async (token: string, expiresIn?: number) => {
-      setState((prev) => ({ ...prev, loading: true }));
-      try {
-        const profileResponse = await fetch(
-          'https://www.googleapis.com/oauth2/v3/userinfo',
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (!profileResponse.ok) {
-          throw new Error('Gagal mengambil profil Google');
-        }
-        const profile = await profileResponse.json();
-
-        const user: GoogleUser = {
-          sub: profile.sub,
-          name: profile.name ?? '',
-          email: profile.email ?? '',
-          picture: profile.picture ?? null,
-        };
-
-        const expiresAt = Date.now() + (expiresIn ?? 3600) * 1000;
-        const session: StoredSession = { user, accessToken: token, expiresAt };
-        await SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(session));
-
-        setState({ user, accessToken: token, loading: false, ready: true });
-      } catch (error) {
-        setState((prev) => ({ ...prev, loading: false }));
-        throw error;
-      }
-    },
-    []
-  );
-
-  // Tangani hasil redirect OAuth
-  useEffect(() => {
-    if (response?.type === 'success') {
-      const { accessToken, expiresIn } = response.authentication ?? {};
-      if (accessToken) {
-        void completeSignIn(accessToken, expiresIn).catch(() => {
-          /* error sudah ditandai lewat state loading; UI menampilkan toast */
-        });
-      }
-    } else if (response?.type === 'error' || response?.type === 'dismiss') {
-      setState((prev) => ({ ...prev, loading: false }));
-    }
-  }, [response, completeSignIn]);
-
   const signIn = useCallback(async () => {
     setState((prev) => ({ ...prev, loading: true }));
     try {
-      await promptAsync();
-      // Hasilnya ditangani useEffect [response] di atas
+      // 1. Pastikan Google Play Services tersedia & tampilkan popup pilih akun
+      await GoogleSignin.hasPlayServices({
+        showPlayServicesUpdateDialog: true,
+      });
+
+      // 2. Popup NATIVE pilih akun Google muncul di sini
+      const result = await GoogleSignin.signIn();
+
+      if (result.type === 'cancelled') {
+        setState((prev) => ({ ...prev, loading: false }));
+        return;
+      }
+
+      const data = result.data;
+      const user: GoogleUser = {
+        sub: data.user.id,
+        name: data.user.name ?? '',
+        email: data.user.email ?? '',
+        picture: data.user.photo ?? null,
+      };
+
+      // 3. Tukar serverAuthCode -> access token (untuk Google Drive API)
+      if (!data.serverAuthCode) {
+        throw new Error('Server tidak mengembalikan kode otorisasi');
+      }
+      const tokens = await exchangeCodeForTokens(data.serverAuthCode);
+
+      const session: StoredSession = {
+        user,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        expiresAt: Date.now() + tokens.expiresIn * 1000,
+      };
+      await SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(session));
+
+      setState({
+        user,
+        accessToken: tokens.accessToken,
+        loading: false,
+        ready: true,
+      });
     } catch (error) {
       setState((prev) => ({ ...prev, loading: false }));
       throw error;
     }
-  }, [promptAsync]);
+  }, []);
 
   const signOut = useCallback(async () => {
-    const { accessToken } = state;
-    // Cabut token di sisi Google (best effort, abaikan jika gagal)
-    if (accessToken) {
-      try {
-        await fetch('https://oauth2.googleapis.com/revoke', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: `token=${accessToken}`,
-        });
-      } catch {
-        // Revoke gagal tetap lanjut logout lokal
-      }
+    try {
+      await GoogleSignin.signOut();
+    } catch {
+      // Abaikan jika gagal - tetap bersihkan sesi lokal
     }
     await SecureStore.deleteItemAsync(STORAGE_KEY);
     setState({ user: null, accessToken: null, loading: false, ready: true });
-  }, [state.accessToken]);
+  }, []);
 
   return (
     <AUTH_CONTEXT.Provider value={{ ...state, signIn, signOut }}>

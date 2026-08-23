@@ -52,4 +52,4 @@ export const RADII = {
 } as const;
 
 /** Nama resmi aplikasi - dipakai di header/app bar */
-export const APP_NAME = 'FLa Vault Project';
+export const APP_NAME = 'FLAVA';

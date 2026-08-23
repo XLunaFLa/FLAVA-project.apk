@@ -1,13 +1,22 @@
 {
   "expo": {
-    "name": "FLa Vault Project",
+    "name": "FLAVA",
     "slug": "fla-vault-project",
     "version": "1.0.0",
     "orientation": "portrait",
-    "scheme": "flavault",
+    "icon": "./assets/icon.png",
+    "scheme": [
+      "flavault",
+      "com.flavault.project"
+    ],
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "backgroundColor": "#000000",
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -16,7 +25,14 @@
     },
     "android": {
       "package": "com.flavault.project",
+      "permissions": [
+        "MANAGE_EXTERNAL_STORAGE",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "POST_NOTIFICATIONS"
+      ],
       "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#000000"
       },
       "intentFilters": [
@@ -35,17 +51,29 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "single",
-      "favicon": "./assets/favicon.png"
+      "output": "single"
     },
     "plugins": [
       "expo-router",
       "expo-sqlite",
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-media-library",
+        {
+          "savePhotosPermission": "Izinkan FLAVA menyimpan video & foto hasil download ke galeri kamu."
+        }
+      ],
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "59c732e6-a883-46bc-a31a-c9a15861afd2"
+      }
     }
   }
 }

@@ -1,19 +1,28 @@
 {
   "cli": {
-    "version": ">= 10.0.0",
-    "appVersionSource": "remote"
+    "version": ">= 10.0.0"
   },
   "build": {
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "761902598156-fdmlpjb3irklr9ehta1o6cdq7rl0443e.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "761902598156-bg4ealonvgcl7q7nogu9k43ek9v0mkcq.apps.googleusercontent.com",
+        "EXPO_PUBLIC_COBALT_API_URL": "https://co.otomir23.me/"
       }
     },
     "production": {
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "761902598156-fdmlpjb3irklr9ehta1o6cdq7rl0443e.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "761902598156-bg4ealonvgcl7q7nogu9k43ek9v0mkcq.apps.googleusercontent.com",
+        "EXPO_PUBLIC_COBALT_API_URL": "https://co.otomir23.me/"
       }
     }
   },

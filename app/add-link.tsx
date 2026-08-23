@@ -19,6 +19,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useToast } from '../src/components/Toast';
@@ -63,16 +64,17 @@ export default function AddLinkScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Tarik judul & thumbnail otomatis via Microlink.io */
-  const handleFetchMetadata = async () => {
-    if (!isValidUrl(url)) {
+  /** Tarik judul & thumbnail otomatis (Microlink -> oEmbed -> favicon) */
+  const handleFetchMetadata = async (targetUrl?: string) => {
+    const source = targetUrl ?? url;
+    if (!isValidUrl(source)) {
       showToast('URL tidak valid. Gunakan format http:// atau https://', 'error');
       return;
     }
 
     setFetching(true);
     try {
-      const metadata = await fetchMetadata(url.trim());
+      const metadata = await fetchMetadata(source.trim());
       if (metadata.title && !title.trim()) {
         setTitle(metadata.title);
       }
@@ -125,6 +127,21 @@ export default function AddLinkScreen() {
     }
   };
 
+  /** Paste URL dari clipboard lalu otomatis tarik metadata */
+  const handlePaste = async () => {
+    try {
+      const clipboardText = await Clipboard.getStringAsync();
+      if (!clipboardText.trim()) {
+        showToast('Clipboard kosong. Salin link terlebih dahulu.', 'error');
+        return;
+      }
+      setUrl(clipboardText.trim());
+      await handleFetchMetadata(clipboardText.trim());
+    } catch {
+      showToast('Gagal membaca clipboard', 'error');
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -148,23 +165,34 @@ export default function AddLinkScreen() {
             keyboardType="url"
             multiline
           />
+          {/* Tombol PASTE dari clipboard (kuning) */}
           <TouchableOpacity
             style={styles.fetchButton}
-            onPress={() => void handleFetchMetadata()}
+            onPress={() => void handlePaste()}
             disabled={fetching}
             activeOpacity={0.8}
-            accessibilityLabel="Tarik metadata otomatis"
+            accessibilityLabel="Paste link dari clipboard"
           >
             {fetching ? (
               <ActivityIndicator size="small" color={COLORS.accentText} />
             ) : (
-              <Ionicons name="cloud-download" size={20} color={COLORS.accentText} />
+              <Ionicons name="clipboard" size={22} color={COLORS.accentText} />
             )}
+          </TouchableOpacity>
+          {/* Tombol kecil: tarik ulang metadata */}
+          <TouchableOpacity
+            style={styles.refreshButton}
+            onPress={() => void handleFetchMetadata()}
+            disabled={fetching}
+            activeOpacity={0.8}
+            accessibilityLabel="Tarik ulang metadata"
+          >
+            <Ionicons name="cloud-download-outline" size={22} color={COLORS.accent} />
           </TouchableOpacity>
         </View>
         <Text style={styles.hint}>
-          Metadata (judul & thumbnail) ditarik otomatis via Microlink.io.
-          Tekan ikon unduh untuk mencoba lagi.
+          Tekan ikon clipboard untuk PASTE dari clipboard. Metadata (judul &
+          thumbnail) ditarik otomatis; ikon awan untuk menarik ulang.
         </Text>
 
         {/* Preview thumbnail */}
@@ -317,6 +345,16 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.accent,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  refreshButton: {
+    width: 48,
+    height: 48,
+    borderRadius: RADII.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
   },
   hint: {
     color: COLORS.textDisabled,

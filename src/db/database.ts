@@ -7,13 +7,22 @@
 import * as SQLite from 'expo-sqlite';
 import { BackupPayload, Category, LinkItem, RestoreResult, VaultStats } from '../types';
 
-let dbInstance: SQLite.SQLiteDatabase | null = null;
+/**
+ * Singleton berbasis promise: mencegah race condition saat beberapa
+ * layar memanggil getDb() bersamaan (penyebab NullPointerException).
+ */
+let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
 /** Buka (atau buat) koneksi database + jalankan migrasi */
 export async function getDb(): Promise<SQLite.SQLiteDatabase> {
-  if (dbInstance) return dbInstance;
+  if (!dbPromise) {
+    dbPromise = openAndMigrate();
+  }
+  return dbPromise;
+}
 
-  dbInstance = await SQLite.openDatabaseAsync('fla-vault.db');
+async function openAndMigrate(): Promise<SQLite.SQLiteDatabase> {
+  const dbInstance = await SQLite.openDatabaseAsync('fla-vault.db');
 
   await dbInstance.execAsync(`
     PRAGMA journal_mode = WAL;
@@ -38,11 +47,50 @@ export async function getDb(): Promise<SQLite.SQLiteDatabase> {
       FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
     );
 
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_links_category ON links(category_id);
     CREATE INDEX IF NOT EXISTS idx_links_favorite ON links(is_favorite);
   `);
 
   return dbInstance;
+}
+
+// ============================================================
+// APP SETTINGS (key-value sederhana)
+// ============================================================
+
+export async function getSetting(key: string): Promise<string | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ value: string }>(
+    'SELECT value FROM app_settings WHERE key = ?',
+    [key]
+  );
+  return row?.value ?? null;
+}
+
+export async function setSetting(key: string, value: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO app_settings (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [key, value]
+  );
+}
+
+/** Ambil jumlah kolom tata letak tersimpan (default 1) */
+export async function getLayoutColumns(): Promise<number> {
+  const saved = await getSetting('layout_columns');
+  const parsed = saved ? parseInt(saved, 10) : 1;
+  return parsed >= 1 && parsed <= 4 ? parsed : 1;
+}
+
+/** Simpan jumlah kolom tata letak (1-4) */
+export async function setLayoutColumns(columns: number): Promise<void> {
+  await setSetting('layout_columns', String(columns));
 }
 
 /** Seed kategori default saat pertama kali aplikasi dijalankan */
@@ -209,7 +257,7 @@ export async function exportAllData(): Promise<BackupPayload> {
   const [categories, links] = await Promise.all([getAllCategories(), getLinks()]);
   return {
     version: 1,
-    appName: 'FLa Vault Project',
+    appName: 'FLAVA',
     exportedAt: new Date().toISOString(),
     categories,
     links,
@@ -228,43 +276,43 @@ export async function restoreFromBackup(
   let categoriesRestored = 0;
   let linksRestored = 0;
 
-  await db.withTransactionAsync(async () => {
-    for (const category of payload.categories ?? []) {
-      await db.runAsync(
-        `INSERT INTO categories (id, name, color, created_at)
-         VALUES (?, ?, ?, COALESCE(?, datetime('now')))
-         ON CONFLICT(id) DO UPDATE SET
-           name = excluded.name,
-           color = excluded.color`,
-        [category.id, category.name, category.color, category.created_at ?? null]
-      );
-      categoriesRestored++;
-    }
+  // Tanpa withTransactionAsync (rawan NPE di beberapa perangkat).
+  // Statement dijalankan berurutan - tetap aman karena upsert idempoten.
+  for (const category of payload.categories ?? []) {
+    await db.runAsync(
+      `INSERT INTO categories (id, name, color, created_at)
+       VALUES (?, ?, ?, COALESCE(?, datetime('now')))
+       ON CONFLICT(id) DO UPDATE SET
+         name = excluded.name,
+         color = excluded.color`,
+      [category.id, category.name, category.color, category.created_at ?? null]
+    );
+    categoriesRestored++;
+  }
 
-    for (const link of payload.links ?? []) {
-      await db.runAsync(
-        `INSERT INTO links (id, url, title, thumbnail, notes, category_id, is_favorite, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
-         ON CONFLICT(url) DO UPDATE SET
-           title = excluded.title,
-           thumbnail = excluded.thumbnail,
-           notes = excluded.notes,
-           category_id = excluded.category_id,
-           is_favorite = excluded.is_favorite`,
-        [
-          link.id,
-          link.url,
-          link.title,
-          link.thumbnail ?? null,
-          link.notes ?? null,
-          link.category_id ?? null,
-          link.is_favorite ?? 0,
-          link.created_at ?? null,
-        ]
-      );
-      linksRestored++;
-    }
-  });
+  for (const link of payload.links ?? []) {
+    await db.runAsync(
+      `INSERT INTO links (id, url, title, thumbnail, notes, category_id, is_favorite, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
+       ON CONFLICT(url) DO UPDATE SET
+         title = excluded.title,
+         thumbnail = excluded.thumbnail,
+         notes = excluded.notes,
+         category_id = excluded.category_id,
+         is_favorite = excluded.is_favorite`,
+      [
+        link.id,
+        link.url,
+        link.title,
+        link.thumbnail ?? null,
+        link.notes ?? null,
+        link.category_id ?? null,
+        link.is_favorite ?? 0,
+        link.created_at ?? null,
+      ]
+    );
+    linksRestored++;
+  }
 
   return { categoriesRestored, linksRestored };
 }

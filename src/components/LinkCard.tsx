@@ -1,6 +1,8 @@
 /**
  * Card untuk menampilkan satu link di dalam vault.
- * Aksi: buka link (tekan card), favorit, salin URL, hapus.
+ * v2: Aksi dipindah ke BARIS BAWAH (lebih besar & mudah diklik)
+ * dan mendukung 2 varian: 'list' (1 kolom) & 'grid' (2-4 kolom).
+ * Aksi: favorit, download, salin URL, hapus. Tekan card -> buka link.
  */
 
 import React from 'react';
@@ -18,9 +20,12 @@ import { COLORS, FONT_SIZES, RADII, SPACING } from '../../constants/theme';
 interface LinkCardProps {
   item: LinkItem;
   categoryName?: string | null;
+  /** 'list' = kartu lebar penuh, 'grid' = ringkas untuk 2-4 kolom */
+  variant?: 'list' | 'grid';
   /** Tekan card -> buka link ke aplikasi asli / browser */
   onPress: () => void;
   onToggleFavorite: () => void;
+  onDownload: () => void;
   onCopy: () => void;
   onDelete: () => void;
 }
@@ -28,113 +33,147 @@ interface LinkCardProps {
 export function LinkCard({
   item,
   categoryName,
+  variant = 'list',
   onPress,
   onToggleFavorite,
+  onDownload,
   onCopy,
   onDelete,
 }: LinkCardProps) {
+  const isGrid = variant === 'grid';
+
   return (
     <TouchableOpacity
-      style={styles.card}
+      style={[styles.card, isGrid && styles.cardGrid]}
       onPress={onPress}
       activeOpacity={0.75}
       accessibilityRole="button"
       accessibilityLabel={`Buka ${item.title}`}
     >
-      {/* Thumbnail / fallback ikon vault */}
-      {item.thumbnail ? (
-        <Image source={{ uri: item.thumbnail }} style={styles.thumbnail} />
-      ) : (
-        <View style={[styles.thumbnail, styles.thumbnailFallback]}>
-          <Ionicons name="link" size={22} color={COLORS.accent} />
-        </View>
-      )}
+      {/* ===== Bagian info ===== */}
+      <View style={isGrid ? styles.infoGrid : styles.infoList}>
+        {item.thumbnail ? (
+          <Image
+            source={{ uri: item.thumbnail }}
+            style={isGrid ? styles.thumbnailGrid : styles.thumbnail}
+          />
+        ) : (
+          <View
+            style={[
+              isGrid ? styles.thumbnailGrid : styles.thumbnail,
+              styles.thumbnailFallback,
+            ]}
+          >
+            <Ionicons name="link" size={isGrid ? 20 : 22} color={COLORS.accent} />
+          </View>
+        )}
 
-      {/* Info utama */}
-      <View style={styles.info}>
-        <Text style={styles.title} numberOfLines={2}>
-          {item.title}
-        </Text>
-        <Text style={styles.url} numberOfLines={1}>
-          {item.url}
-        </Text>
-        <View style={styles.metaRow}>
+        <View style={styles.textWrap}>
+          <Text
+            style={[styles.title, isGrid && styles.titleGrid]}
+            numberOfLines={isGrid ? 2 : 2}
+          >
+            {item.title}
+          </Text>
+          {!isGrid ? (
+            <Text style={styles.url} numberOfLines={1}>
+              {item.url}
+            </Text>
+          ) : null}
           {categoryName ? (
             <View style={styles.categoryBadge}>
               <Text style={styles.categoryText}>{categoryName}</Text>
             </View>
           ) : null}
-          {item.notes ? (
-            <Ionicons
-              name="document-text"
-              size={12}
-              color={COLORS.textDisabled}
-            />
-          ) : null}
         </View>
       </View>
 
-      {/* Kolom aksi */}
-      <View style={styles.actions}>
-        <ActionIcon
-          name={item.is_favorite ? 'star' : 'star-outline'}
+      {/* ===== Baris aksi di BAWAH (besar & mudah diklik) ===== */}
+      <View style={styles.actionRow}>
+        <ActionButton
+          icon={item.is_favorite ? 'star' : 'star-outline'}
+          label="Favorit"
           color={item.is_favorite ? COLORS.accent : COLORS.textSecondary}
           onPress={onToggleFavorite}
-          label="Favorit"
         />
-        <ActionIcon
-          name="copy-outline"
+        <ActionButton
+          icon="download-outline"
+          label="Download"
+          color={COLORS.success}
+          onPress={onDownload}
+        />
+        <ActionButton
+          icon="copy-outline"
+          label="Salin"
           color={COLORS.textSecondary}
           onPress={onCopy}
-          label="Salin URL"
         />
-        <ActionIcon
-          name="trash-outline"
+        <ActionButton
+          icon="trash-outline"
+          label="Hapus"
           color={COLORS.danger}
           onPress={onDelete}
-          label="Hapus"
         />
       </View>
     </TouchableOpacity>
   );
 }
 
-interface ActionIconProps {
-  name: keyof typeof Ionicons.glyphMap;
+interface ActionButtonProps {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
   color: string;
   onPress: () => void;
-  label: string;
 }
 
-function ActionIcon({ name, color, onPress, label }: ActionIconProps) {
+function ActionButton({ icon, label, color, onPress }: ActionButtonProps) {
   return (
     <TouchableOpacity
-      onPress={onPress}
       style={styles.actionButton}
-      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      onPress={onPress}
+      activeOpacity={0.6}
+      hitSlop={{ top: 4, bottom: 4 }}
       accessibilityRole="button"
       accessibilityLabel={label}
     >
-      <Ionicons name={name} size={19} color={color} />
+      <Ionicons name={icon} size={22} color={color} />
+      <Text style={[styles.actionLabel, { color }]} numberOfLines={1}>
+        {label}
+      </Text>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: COLORS.card,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: RADII.lg,
     padding: SPACING.md,
   },
+  cardGrid: {
+    padding: SPACING.sm,
+  },
+  // --- Varian list ---
+  infoList: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   thumbnail: {
-    width: 54,
-    height: 54,
+    width: 56,
+    height: 56,
     borderRadius: RADII.md,
     backgroundColor: COLORS.surface,
+  },
+  // --- Varian grid ---
+  infoGrid: {},
+  thumbnailGrid: {
+    width: '100%',
+    height: 90,
+    borderRadius: RADII.md,
+    backgroundColor: COLORS.surface,
+    marginBottom: SPACING.sm,
   },
   thumbnailFallback: {
     alignItems: 'center',
@@ -142,10 +181,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  info: {
+  textWrap: {
     flex: 1,
     marginLeft: SPACING.md,
-    marginRight: SPACING.xs,
   },
   title: {
     color: COLORS.textPrimary,
@@ -153,36 +191,47 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: 20,
   },
+  titleGrid: {
+    marginLeft: 0,
+    fontSize: FONT_SIZES.sm,
+    lineHeight: 18,
+  },
   url: {
     color: COLORS.textSecondary,
     fontSize: FONT_SIZES.xs,
     marginTop: 2,
   },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    marginTop: 6,
-  },
   categoryBadge: {
+    alignSelf: 'flex-start',
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: RADII.round,
     paddingVertical: 2,
     paddingHorizontal: SPACING.sm,
+    marginTop: 6,
   },
   categoryText: {
     color: COLORS.textSecondary,
     fontSize: FONT_SIZES.xs,
   },
-  actions: {
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    alignSelf: 'stretch',
-    paddingVertical: 2,
+  // --- Baris aksi bawah ---
+  actionRow: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    marginTop: SPACING.md,
+    paddingTop: SPACING.sm,
   },
   actionButton: {
-    padding: 3,
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.xs,
+  },
+  actionLabel: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: '600',
+    marginTop: 2,
   },
 });
