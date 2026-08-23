@@ -15,6 +15,9 @@ android/
 .env
 .env.local
 client_secret*.json
+*.jks
+*.keystore
+android/keystore.properties
 
 # IDE
 .vscode/
@@ -36,3 +39,7 @@ yarn-error.*
 fla-vault-qr.png
 cobalt-*.md
 cobalt-*.json
+# Android build output 
+android/build/ 
+android/app/build/ 
+android/.gradle/
