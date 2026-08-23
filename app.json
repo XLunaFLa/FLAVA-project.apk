@@ -5,10 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": [
-      "flavault",
-      "com.flavault.project"
-    ],
+    "scheme": ["flavault", "com.flavault.project"],
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "backgroundColor": "#000000",
@@ -25,11 +22,16 @@
     },
     "android": {
       "package": "com.flavault.project",
+      "versionCode": 1,
       "permissions": [
         "MANAGE_EXTERNAL_STORAGE",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
-        "POST_NOTIFICATIONS"
+        "POST_NOTIFICATIONS",
+        "REQUEST_INSTALL_PACKAGES",
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO",
+        "READ_MEDIA_AUDIO"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
@@ -74,6 +76,12 @@
       "eas": {
         "projectId": "59c732e6-a883-46bc-a31a-c9a15861afd2"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/59c732e6-a883-46bc-a31a-c9a15861afd2"
     }
   }
 }

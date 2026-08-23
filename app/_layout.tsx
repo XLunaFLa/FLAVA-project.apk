@@ -1,17 +1,17 @@
 /**
- * Root layout - FLa Vault Project.
- * Menyediakan provider global (Toast, Auth) dan menangani
- * share intent dari aplikasi lain (Share Extension Android).
+ * Root layout - FLAVA.
+ * Menyediakan provider global (Toast, Auth), menangani share intent,
+ * dan mengecek update aplikasi saat startup.
  */
 
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Alert } from 'react-native';
 import { AuthProvider } from '../src/services/auth';
-import { ToastProvider } from '../src/components/Toast';
+import { ToastProvider, useToast } from '../src/components/Toast';
 import { COLORS } from '../constants/theme';
 import { extractFirstUrl } from '../src/utils/validation';
 import {
@@ -20,6 +20,11 @@ import {
   requestVaultAccess,
 } from '../src/services/storage';
 import { ensureNotificationPermission } from '../src/services/download';
+import {
+  checkForUpdate,
+  downloadAndInstallUpdate,
+  UpdateInfo,
+} from '../src/services/updater';
 
 export default function RootLayout() {
   const router = useRouter();
@@ -84,6 +89,7 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ToastProvider>
+        <UpdateChecker />
         <AuthProvider>
           <StatusBar style="light" />
           <Stack
@@ -109,4 +115,62 @@ export default function RootLayout() {
       </ToastProvider>
     </SafeAreaProvider>
   );
+}
+
+/**
+ * Cek update dari GitHub saat aplikasi dibuka (delay 5 detik agar
+ * tidak mengganggu load awal). Jika ada versi baru, tawarkan download
+ * & install langsung dari aplikasi.
+ */
+function UpdateChecker() {
+  const { showToast } = useToast();
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void (async () => {
+        const update = await checkForUpdate();
+        if (!update) return;
+
+        Alert.alert(
+          'Update Tersedia 🎉',
+          `Versi ${update.versionName} sekarang tersedia.${
+            update.notes ? `\n\n${update.notes}` : ''
+          }\n\nUpdate tanpa perlu uninstall - data kamu tetap aman.`,
+          [
+            { text: 'Nanti', style: 'cancel' },
+            {
+              text: 'Update Sekarang',
+              onPress: () => {
+                if (busy) return;
+                setBusy(true);
+                showToast('Mengunduh update...', 'info');
+                void (async () => {
+                  try {
+                    await downloadAndInstallUpdate(update, (percent) => {
+                      if (percent > 0 && percent % 25 === 0) {
+                        showToast(`Mengunduh update ${percent}%`, 'info');
+                      }
+                    });
+                  } catch (error) {
+                    showToast(
+                      error instanceof Error
+                        ? error.message
+                        : 'Update gagal',
+                      'error'
+                    );
+                  } finally {
+                    setBusy(false);
+                  }
+                })();
+              },
+            },
+          ]
+        );
+      })();
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [busy, showToast]);
+
+  return null;
 }

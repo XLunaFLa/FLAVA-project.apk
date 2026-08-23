@@ -5,6 +5,7 @@
   "build": {
     "preview": {
       "distribution": "internal",
+      "channel": "preview",
       "android": {
         "buildType": "apk"
       },
@@ -12,10 +13,12 @@
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "761902598156-fdmlpjb3irklr9ehta1o6cdq7rl0443e.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "761902598156-bg4ealonvgcl7q7nogu9k43ek9v0mkcq.apps.googleusercontent.com",
         "EXPO_PUBLIC_COBALT_API_URL": "https://co.otomir23.me/"
-      }
+      },
+      "channel": "preview"
     },
     "production": {
       "autoIncrement": true,
+      "channel": "production",
       "android": {
         "buildType": "app-bundle"
       },
@@ -23,7 +26,8 @@
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "761902598156-fdmlpjb3irklr9ehta1o6cdq7rl0443e.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "761902598156-bg4ealonvgcl7q7nogu9k43ek9v0mkcq.apps.googleusercontent.com",
         "EXPO_PUBLIC_COBALT_API_URL": "https://co.otomir23.me/"
-      }
+      },
+      "channel": "production"
     }
   },
   "submit": {
