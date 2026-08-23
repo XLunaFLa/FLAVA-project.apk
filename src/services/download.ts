@@ -90,10 +90,50 @@ export async function notifyDownloadComplete(
   }
 }
 
+/**
+ * Provider khusus TikTok via tikwm.com (gratis, tanpa key).
+ * Menyediakan file LANGSUNG dari CDN TikTok (tanpa konversi server),
+ * sehingga tidak terpengaruh keterbatasan ffmpeg instance Cobalt.
+ * Return null jika bukan link TikTok / gagal.
+ */
+async function resolveViaTikwm(
+  sourceUrl: string,
+  mode: DownloadMode
+): Promise<{ downloadUrl: string; filename: string } | null> {
+  if (!/tiktok\.com/i.test(sourceUrl)) return null;
+  try {
+    const response = await fetch(
+      `https://www.tikwm.com/api/?url=${encodeURIComponent(sourceUrl)}&hd=1`
+    );
+    const json = await response.json();
+    if (json.code !== 0 || !json.data) return null;
+
+    if (mode === 'audio') {
+      if (!json.data.music) return null;
+      return {
+        downloadUrl: json.data.music,
+        filename: `TikTok_Audio_${Date.now()}.mp3`,
+      };
+    }
+    const videoUrl = json.data.hdplay || json.data.play;
+    if (!videoUrl) return null;
+    return {
+      downloadUrl: videoUrl,
+      filename: `TikTok_Video_${Date.now()}.mp4`,
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Minta Cobalt menyiapkan link unduhan langsung dari source URL */
 export async function resolveMediaUrl(
   request: DownloadRequest
 ): Promise<{ downloadUrl: string; filename: string }> {
+  // TikTok -> tikwm dulu (lebih andal), fallback ke Cobalt
+  const tikwm = await resolveViaTikwm(request.sourceUrl, request.mode);
+  if (tikwm) return tikwm;
+
   const payload: Record<string, unknown> = {
     url: request.sourceUrl,
     downloadMode: request.mode === 'audio' ? 'audio' : 'auto',
