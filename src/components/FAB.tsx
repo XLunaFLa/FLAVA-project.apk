@@ -26,6 +26,7 @@ interface MenuItem {
 
 const MENU_ITEMS: MenuItem[] = [
   { icon: 'add-circle-outline', label: 'Tambah Vault', route: '/add-link' },
+  { icon: 'download-outline', label: 'Download Only', route: '/download-only' },
   { icon: 'star-outline', label: 'Favorites', route: '/(tabs)/favorites' },
   { icon: 'grid-outline', label: 'Categories', route: '/(tabs)/categories' },
   { icon: 'settings-outline', label: 'Settings', route: '/(tabs)/settings' },

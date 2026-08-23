@@ -110,6 +110,17 @@ export default function RootLayout() {
                 headerTitleStyle: { fontWeight: '700' },
               }}
             />
+            <Stack.Screen
+              name="download-only"
+              options={{
+                presentation: 'modal',
+                headerShown: true,
+                title: 'Download Only',
+                headerStyle: { backgroundColor: COLORS.surface },
+                headerTintColor: COLORS.textPrimary,
+                headerTitleStyle: { fontWeight: '700' },
+              }}
+            />
           </Stack>
         </AuthProvider>
       </ToastProvider>
