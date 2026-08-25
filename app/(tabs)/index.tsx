@@ -50,7 +50,8 @@ export default function HomeScreen() {
   const [downloading, setDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<{
     name: string;
-    percent: number;
+    percent: number | null;
+    mb: number;
   } | null>(null);
 
   /** Muat kategori + daftar link + preferensi tata letak */
@@ -166,7 +167,7 @@ export default function HomeScreen() {
   const startDownload = useCallback(
     (item: LinkItem, mode: 'video' | 'audio', detail: string) => {
       setDownloading(true);
-      setDownloadProgress({ name: item.title, percent: 0 });
+      setDownloadProgress({ name: item.title, percent: 0, mb: 0 });
       showToast(
         mode === 'video'
           ? `Menyiapkan download video ${detail}p...`
@@ -184,7 +185,13 @@ export default function HomeScreen() {
             },
             (progress) => {
               setDownloadProgress((prev) =>
-                prev ? { ...prev, percent: progress.percent } : prev
+                prev
+                  ? {
+                      ...prev,
+                      percent: progress.percent,
+                      mb: progress.downloadedMb,
+                    }
+                  : prev
               );
             }
           );
@@ -311,14 +318,21 @@ export default function HomeScreen() {
               {downloadProgress.name}
             </Text>
             <Text style={styles.progressPercent}>
-              {downloadProgress.percent}%
+              {downloadProgress.percent != null
+                ? `${downloadProgress.percent}%`
+                : `${downloadProgress.mb} MB`}
             </Text>
           </View>
           <View style={styles.progressTrack}>
             <View
               style={[
                 styles.progressFill,
-                { width: `${downloadProgress.percent}%` },
+                {
+                  width:
+                    downloadProgress.percent != null
+                      ? `${downloadProgress.percent}%`
+                      : '50%',
+                },
               ]}
             />
           </View>

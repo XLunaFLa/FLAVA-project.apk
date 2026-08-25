@@ -8,6 +8,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  DimensionValue,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -30,6 +31,11 @@ const AUDIO_BITRATES = ['128', '256', '320'];
 
 type Mode = 'video' | 'audio';
 
+interface ProgressState {
+  percent: number | null;
+  mb: number;
+}
+
 export default function DownloadOnlyScreen() {
   const { showToast } = useToast();
 
@@ -40,7 +46,10 @@ export default function DownloadOnlyScreen() {
   const [bitrate, setBitrate] = useState('320');
   const [fetching, setFetching] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [progress, setProgress] = useState<ProgressState>({
+    percent: 0,
+    mb: 0,
+  });
 
   // Tarik metadata judul untuk preview (gagal = tidak masalah, hanya preview)
   const loadPreview = async (targetUrl: string) => {
@@ -79,7 +88,7 @@ export default function DownloadOnlyScreen() {
     if (downloading) return;
 
     setDownloading(true);
-    setProgress(0);
+    setProgress({ percent: 0, mb: 0 });
     showToast(
       mode === 'video'
         ? `Menyiapkan download video ${quality}p...`
@@ -95,7 +104,7 @@ export default function DownloadOnlyScreen() {
           videoQuality: mode === 'video' ? quality : undefined,
           audioBitrate: mode === 'audio' ? bitrate : undefined,
         },
-        (p) => setProgress(p.percent)
+        (p) => setProgress({ percent: p.percent, mb: p.downloadedMb })
       );
       showToast('Download selesai! Cek folder FLAVA', 'success');
     } catch (error) {
@@ -105,9 +114,19 @@ export default function DownloadOnlyScreen() {
       );
     } finally {
       setDownloading(false);
-      setProgress(0);
+      setProgress({ percent: 0, mb: 0 });
     }
   };
+
+  // Teks progress: persen jika tersedia, kalau tidak tampilkan MB
+  const progressLabel = downloading
+    ? progress.percent != null
+      ? `Mengunduh... ${progress.percent}%`
+      : `Mengunduh... ${progress.mb} MB`
+    : 'Download Sekarang';
+
+  const progressWidth: DimensionValue =
+    progress.percent != null ? `${progress.percent}%` : '50%';
 
   return (
     <KeyboardAvoidingView
@@ -243,18 +262,14 @@ export default function DownloadOnlyScreen() {
           ) : (
             <Ionicons name="download" size={20} color={COLORS.accentText} />
           )}
-          <Text style={styles.downloadButtonText}>
-            {downloading
-              ? `Mengunduh... ${progress}%`
-              : 'Download Sekarang'}
-          </Text>
+          <Text style={styles.downloadButtonText}>{progressLabel}</Text>
         </TouchableOpacity>
 
         {/* Progress bar */}
         {downloading ? (
           <View style={styles.progressTrack}>
             <View
-              style={[styles.progressFill, { width: `${progress}%` }]}
+              style={[styles.progressFill, { width: progressWidth }]}
             />
           </View>
         ) : null}
